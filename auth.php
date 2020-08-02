@@ -101,6 +101,18 @@ class auth_plugin_oidc extends \auth_plugin_base {
         }
         return $this->loginflow->loginpage_hook($frm, $user);
     }
+    /**
+     * Hook for overriding behaviour of logout.
+     *
+     */
+    public function logoutpage_hook() {
+        if ($alterlogout = get_config('auth_oidc', 'alterlogout')) {
+            // Do the normal moodle logout first as we redirect away before it
+            // gets called by the normal core process.
+            require_logout();
+            redirect($alterlogout);
+        }
+    }
 
     /**
       * Determines if we will redirect to the redirecturi
