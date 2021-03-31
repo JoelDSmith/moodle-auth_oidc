@@ -60,7 +60,7 @@ class auth_oidc_oidcclient_testcase extends \advanced_testcase {
         $this->assertEquals($id, $client->get_clientid());
         $this->assertEquals($secret, $client->get_clientsecret());
         $this->assertEquals($redirecturi, $client->get_redirecturi());
-        $this->assertEquals($resource, $client->get_resource());
+        $this->assertEquals($tokenresource, $client->get_tokenresource());
     }
 
     /**
