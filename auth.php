@@ -284,11 +284,32 @@ class auth_plugin_oidc extends \auth_plugin_base {
     }
 
     /**
-     * Cron function.
+     * Log out user from Office 365 if single sign off integration is enabled.
+     *
+     * @param stdClass $user
+     *
+     * @return bool
      */
-    public function cron() {
-        global $DB;
-        $params = [time() - (5 * 60)];
-        $DB->delete_records_select('auth_oidc_state', 'timecreated < ?', $params);
+    public function postlogout_hook($user) {
+        global $CFG;
+
+        $singlesignoutsetting = get_config('auth_oidc', 'single_sign_off');
+
+        if ($singlesignoutsetting) {
+            $logouturl = get_config('auth_oidc', 'logouturi');
+            if (!$logouturl) {
+                $logouturl = 'https://login.microsoftonline.com/common/oauth2/logout?post_logout_redirect_uri=' .
+                    urlencode($CFG->wwwroot);
+            } else {
+                if (preg_match("/^https:\/\/login.microsoftonline.com\//", $logouturl) &&
+                    preg_match("/\/oauth2\/logout$/", $logouturl)) {
+                    $logouturl .= '?post_logout_redirect_uri=' . urlencode($CFG->wwwroot);
+                }
+            }
+
+            redirect($logouturl);
+        }
+
+        return true;
     }
 }

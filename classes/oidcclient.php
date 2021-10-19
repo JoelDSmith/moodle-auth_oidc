@@ -23,11 +23,15 @@
 
 namespace auth_oidc;
 
+defined('MOODLE_INTERNAL') || die();
+
+require_once($CFG->dirroot . '/auth/oidc/lib.php');
+
 /**
  * OpenID Connect Client
  */
 class oidcclient {
-    /** @var \auth_oidc\httpclientinterface An HTTP client to use. */
+    /** @var httpclientinterface An HTTP client to use. */
     protected $httpclient;
 
     /** @var string The client ID. */
@@ -42,12 +46,14 @@ class oidcclient {
     /** @var array Array of endpoints. */
     protected $endpoints = [];
 
+    protected $tokenresource;
+
     /**
      * Constructor.
      *
-     * @param \auth_oidc\httpclientinterface $httpclient An HTTP client to use for background communication.
+     * @param httpclientinterface $httpclient An HTTP client to use for background communication.
      */
-    public function __construct(\auth_oidc\httpclientinterface $httpclient) {
+    public function __construct(httpclientinterface $httpclient) {
         $this->httpclient = $httpclient;
     }
 
@@ -56,17 +62,27 @@ class oidcclient {
      *
      * @param string $id The registered client ID.
      * @param string $secret The registered client secret.
-     * @param string $scope The requested OID scope.
      * @param string $redirecturi The registered client redirect URI.
+     * @param string $tokenresource
+     * @param string $scope The requested OID scope.
      */
-    public function setcreds($id, $secret, $redirecturi, $resource, $scope) {
+    public function setcreds($id, $secret, $redirecturi, $tokenresource, $scope) {
         $this->clientid = $id;
         $this->clientsecret = $secret;
         $this->redirecturi = $redirecturi;
-        if (!empty($resource)) {
-            $this->resource = $resource;
+        if (!empty($tokenresource)) {
+            $this->tokenresource = $tokenresource;
         } else {
-            $this->resource = (static::use_chinese_api() === true) ? 'https://microsoftgraph.chinacloudapi.cn' : 'https://graph.microsoft.com';
+            if (auth_oidc_is_local_365_installed()) {
+                if (\local_o365\rest\o365api::use_chinese_api() === true) {
+                    $this->tokenresource = 'https://microsoftgraph.chinacloudapi.cn';
+                } else {
+                    $this->tokenresource = 'https://graph.microsoft.com';
+                }
+            } else {
+                $this->tokenresource = 'https://graph.microsoft.com';
+            }
+
         }
         $this->scope = (!empty($scope)) ? $scope : 'openid profile email';
     }
@@ -99,12 +115,12 @@ class oidcclient {
     }
 
     /**
-     * Get the set resource.
+     * Get the set token resource.
      *
-     * @return string The set resource.
+     * @return string The set token resource.
      */
-    public function get_resource() {
-        return (isset($this->resource)) ? $this->resource : null;
+    public function get_tokenresource() {
+        return (isset($this->tokenresource)) ? $this->tokenresource : null;
     }
 
     /**
@@ -150,7 +166,7 @@ class oidcclient {
             'scope' =>  $this->scope,
             'nonce' => $nonce,
             'response_mode' => 'form_post',
-            'resource' => $this->resource,
+            'resource' => $this->tokenresource,
             'state' => $this->getnewstate($nonce, $stateparams),
             'redirect_uri' => $this->redirecturi
         ];
@@ -229,16 +245,16 @@ class oidcclient {
             'username' => $username,
             'password' => $password,
             'scope' => 'openid profile email',
-            'resource' => $this->resource,
+            'resource' => $this->tokenresource,
             'client_id' => $this->clientid,
             'client_secret' => $this->clientsecret,
         ];
 
         try {
             $returned = $this->httpclient->post($this->endpoints['token'], $params);
-            return \auth_oidc\utils::process_json_response($returned, ['token_type' => null, 'id_token' => null]);
+            return utils::process_json_response($returned, ['token_type' => null, 'id_token' => null]);
         } catch (\Exception $e) {
-            \auth_oidc\utils::debug('Error in rocredsrequest request', 'oidcclient::rocredsrequest', $e->getMessage());
+            utils::debug('Error in rocredsrequest request', 'oidcclient::rocredsrequest', $e->getMessage());
             return false;
         }
     }
@@ -246,7 +262,6 @@ class oidcclient {
     /**
      * Exchange an authorization code for an access token.
      *
-     * @param string $tokenendpoint The token endpoint URI.
      * @param string $code An authorization code.
      * @return array Received parameters.
      */
@@ -264,6 +279,6 @@ class oidcclient {
         ];
 
         $returned = $this->httpclient->post($this->endpoints['token'], $params);
-        return \auth_oidc\utils::process_json_response($returned, ['id_token' => null]);
+        return utils::process_json_response($returned, ['id_token' => null]);
     }
 }

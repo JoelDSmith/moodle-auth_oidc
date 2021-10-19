@@ -17,11 +17,16 @@
 /**
  * @package auth_oidc
  * @author James McQuillan <james.mcquillan@remote-learner.net>
+ * @author Lai Wei <lai.wei@enovation.ie>
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @copyright (C) 2014 onwards Microsoft, Inc. (http://microsoft.com/)
  */
 
 namespace auth_oidc\loginflow;
+
+defined('MOODLE_INTERNAL') || die();
+
+require_once($CFG->dirroot . '/auth/oidc/lib.php');
 
 class base {
     /** @var object Plugin config. */
@@ -31,8 +36,6 @@ class base {
     protected $httpclient;
 
     public function __construct() {
-        global $DB;
-
         $default = [
             'opname' => get_string('pluginname', 'auth_oidc')
         ];
@@ -51,7 +54,7 @@ class base {
         ];
 
         // If local_o365 plugin is installed, use its settings for the core fields.
-        if ($DB->record_exists('config_plugins', ['plugin' => 'local_o365', 'name' => 'version'])) {
+        if (auth_oidc_is_local_365_installed()) {
             $fieldmaps = get_config('local_o365', 'fieldmap');
             if ($fieldmaps === false) {
                 $fieldmaps = \local_o365\adminsetting\usersyncfieldmap::defaultmap();
@@ -68,10 +71,9 @@ class base {
                     continue;
                 }
                 list($remotefield, $localfield, $behavior) = $fieldmap;
-                if (in_array($localfield, ['idnumber', 'firstname', 'lastname', 'email', 'lang'])) {
-                    if (in_array($behavior, ['onlogin', 'always'])) {
-                        $forcedconfig['field_updatelocal_' . $localfield] = 'onlogin';
-                    }
+                if (in_array($behavior, ['onlogin', 'always'])) {
+                    $forcedconfig['field_updatelocal_' . $localfield] = 'onlogin';
+                    $forcedconfig['field_lock_' . $localfield] = 'unlocked';
                 }
             }
         }
@@ -124,52 +126,87 @@ class base {
             return false;
         }
 
-        if ($userrecord = $DB->get_record('user', ['username' => $username])) {
+        if ($DB->record_exists('user', ['username' => $username])) {
             $eventtype = 'login';
         } else {
             $eventtype = 'create';
         }
 
-        $o365installed = $DB->get_record('config_plugins', ['plugin' => 'local_o365', 'name' => 'version']);
-        if (!empty($o365installed) && \local_o365\feature\usersync\main::fieldmap_require_graph_api_call($eventtype)) {
-            $apiclient = \local_o365\utils::get_api($tokenrec->userid);
-            $userdata = $apiclient->get_user($tokenrec->oidcuniqid);
+        if (auth_oidc_is_local_365_installed()) {
+            if (\local_o365\feature\usersync\main::fieldmap_require_graph_api_call($eventtype)) {
+                // If local_o365 is installed, and field mapping uses fields not covered by token,
+                // then call Graph API function to get user details.
+                $apiclient = \local_o365\utils::get_api($tokenrec->userid);
+                if ($apiclient) {
+                    $userdata = $apiclient->get_user($tokenrec->oidcuniqid, 'default', true);
+                }
+            } else {
+                // If local_o365 is installed, but all field mapping fields are in token, then use token.
+                $idtoken = \auth_oidc\jwt::instance_from_encoded($tokenrec->idtoken);
 
+                $oid = $idtoken->claim('oid');
+                if (!empty($oid)) {
+                    $userdata['objectId'] = $oid;
+                }
+
+                $upn = $idtoken->claim('upn');
+                if (!empty($upn)) {
+                    $userdata['userPrincipalName'] = $upn;
+                } else if (isset($tokenrec->oidcusername) && $tokenrec->oidcusername) {
+                    $userdata['userPrincipalName'] = $tokenrec->oidcusername;
+                }
+
+                $firstname = $idtoken->claim('given_name');
+                if (!empty($firstname)) {
+                    $userdata['givenName'] = $firstname;
+                }
+
+                $lastname = $idtoken->claim('family_name');
+                if (!empty($lastname)) {
+                    $userdata['surname'] = $lastname;
+                }
+
+                $email = $idtoken->claim('email');
+                if (!empty($email)) {
+                    $userdata['mail'] = $email;
+                } else {
+                    if (!empty($upn)) {
+                        $aademailvalidateresult = filter_var($upn, FILTER_VALIDATE_EMAIL);
+                        if (!empty($aademailvalidateresult)) {
+                            $userdata['mail'] = $aademailvalidateresult;
+                        }
+                    }
+                }
+            }
+
+            // Call function in local_o365 to map fields.
             $updateduser = \local_o365\feature\usersync\main::apply_configured_fieldmap($userdata, new \stdClass(), 'login');
             $userinfo = (array)$updateduser;
         } else {
+            // If local_o365 is not installed, use default mapping.
             $userinfo = [];
 
             $idtoken = \auth_oidc\jwt::instance_from_encoded($tokenrec->idtoken);
 
-            $oid = $idtoken->claim('oid');
-            if (!empty($oid)) {
-                $userinfo['objectId'] = $oid;
-            }
-
-            $upn = $idtoken->claim('upn');
-            if (!empty($upn)) {
-                $userinfo['userPrincipalName'] = $upn;
-            }
-
             $firstname = $idtoken->claim('given_name');
             if (!empty($firstname)) {
-                $userinfo['givenName'] = $firstname;
+                $userinfo['firstname'] = $firstname;
             }
 
             $lastname = $idtoken->claim('family_name');
             if (!empty($lastname)) {
-                $userinfo['surname'] = $lastname;
+                $userinfo['lastname'] = $lastname;
             }
 
             $email = $idtoken->claim('email');
             if (!empty($email)) {
-                $userinfo['mail'] = $email;
+                $userinfo['email'] = $email;
             } else {
+                $upn = $idtoken->claim('upn');
                 if (!empty($upn)) {
                     $aademailvalidateresult = filter_var($upn, FILTER_VALIDATE_EMAIL);
                     if (!empty($aademailvalidateresult)) {
-                        $userinfo['mail'] = $aademailvalidateresult;
+                        $userinfo['email'] = $aademailvalidateresult;
                     }
                 }
             }
@@ -202,8 +239,9 @@ class base {
      * @param bool $justremovetokens If true, just remove the stored OIDC tokens for the user, otherwise revert login methods.
      * @param bool $donotremovetokens If true, do not remove tokens when disconnecting. This migrates from a login account to a
      *                                "linked" account.
-     * @param \moodle_url $redirect Where to redirect if successful.
-     * @param \moodle_url $selfurl The page this is accessed from. Used for some redirects.
+     * @param \moodle_url|null $redirect Where to redirect if successful.
+     * @param \moodle_url|null $selfurl The page this is accessed from. Used for some redirects.
+     * @param  $userid
      */
     public function disconnect($justremovetokens = false, $donotremovetokens = false, \moodle_url $redirect = null,
                                \moodle_url $selfurl = null, $userid = null) {
@@ -246,7 +284,8 @@ class base {
 
             // Check if we have recorded the user's previous login method.
             $prevmethodrec = $DB->get_record('auth_oidc_prevlogin', ['userid' => $userrec->id]);
-            $prevauthmethod = (!empty($prevmethodrec) && is_enabled_auth($prevmethodrec->method) === true) ? $prevmethodrec->method : null;
+            $prevauthmethod = (!empty($prevmethodrec) && is_enabled_auth($prevmethodrec->method) === true) ?
+                $prevmethodrec->method : null;
             // Manual is always available, we don't need it twice.
             if ($prevauthmethod === 'manual') {
                 $prevauthmethod = null;
@@ -275,10 +314,8 @@ class base {
             if ($mform->is_cancelled()) {
                 redirect($redirect);
             } else if ($fromform = $mform->get_data()) {
-
-                $origusername = $userrec->username;
-
-                if (empty($fromform->newmethod) || ($fromform->newmethod !== $prevauthmethod && $fromform->newmethod !== 'manual')) {
+                if (empty($fromform->newmethod) || ($fromform->newmethod !== $prevauthmethod &&
+                        $fromform->newmethod !== 'manual')) {
                     throw new \moodle_exception('errorauthdisconnectinvalidmethod', 'auth_oidc');
                 }
 
@@ -381,13 +418,26 @@ class base {
         $clientsecret = (isset($this->config->clientsecret)) ? $this->config->clientsecret : null;
         $redirecturi = (!empty($CFG->loginhttps)) ? str_replace('http://', 'https://', $CFG->wwwroot) : $CFG->wwwroot;
         $redirecturi .= '/auth/oidc/';
-        $resource = (isset($this->config->oidcresource)) ? $this->config->oidcresource : null;
+        $tokenresource = (isset($this->config->oidcresource)) ? $this->config->oidcresource : null;
         $scope = (isset($this->config->oidcscope)) ? $this->config->oidcscope : null;
 
         $client = new \auth_oidc\oidcclient($this->httpclient);
-        $client->setcreds($clientid, $clientsecret, $redirecturi, $resource, $scope);
+        $client->setcreds($clientid, $clientsecret, $redirecturi, $tokenresource, $scope);
 
-        $client->setendpoints(['auth' => $this->config->authendpoint, 'token' => $this->config->tokenendpoint]);
+        $authendpoint = $this->config->authendpoint;
+        $tokenendpoint = $this->config->tokenendpoint;
+        $aadtenant = get_config('local_o365', 'aadtenant');
+        if ($aadtenant) {
+            if ($authendpoint == 'https://login.microsoftonline.com/common/oauth2/authorize') {
+                $authendpoint = str_replace('common', $aadtenant, $authendpoint);
+            }
+
+            if ($tokenendpoint == 'https://login.microsoftonline.com/common/oauth2/token') {
+                $tokenendpoint = str_replace('common', $aadtenant, $tokenendpoint);
+            }
+        }
+
+        $client->setendpoints(['auth' => $authendpoint, 'token' => $tokenendpoint]);
         return $client;
     }
 
@@ -479,7 +529,6 @@ class base {
         return ($hasrestrictions === true && $userpassed !== true) ? false : true;
     }
 
-
     /**
      * Create a token for a user, thus linking a Moodle user to an OpenID Connect user.
      *
@@ -488,20 +537,35 @@ class base {
      * @param array $authparams Parameters receieved from the auth request.
      * @param array $tokenparams Parameters received from the token request.
      * @param \auth_oidc\jwt $idtoken A JWT object representing the received id_token.
+     * @param int $userid
+     * @param null|string $originalupn
      * @return \stdClass The created token database record.
      */
-    protected function createtoken($oidcuniqid, $username, $authparams, $tokenparams, \auth_oidc\jwt $idtoken, $userid = 0) {
+    protected function createtoken($oidcuniqid, $username, $authparams, $tokenparams, \auth_oidc\jwt $idtoken, $userid = 0,
+        $originalupn = null) {
         global $DB;
 
-        // Determine remote username. Use 'upn' if available (Azure-specific), or fall back to standard 'sub'.
-        $oidcusername = $idtoken->claim('upn');
-        if (empty($oidcusername)) {
-            $oidcusername = $idtoken->claim('sub');
+        if (!is_null($originalupn)) {
+            $oidcusername = $originalupn;
+        } else {
+            // Determine remote username. Use 'upn' if available (Azure-specific), or fall back to standard 'sub'.
+            $oidcusername = $idtoken->claim('upn');
+            if (empty($oidcusername)) {
+                $oidcusername = $idtoken->claim('sub');
+            }
         }
 
         // We should not fail here (idtoken was verified earlier to at least contain 'sub', but just in case...).
         if (empty($oidcusername)) {
             throw new \moodle_exception('errorauthinvalididtoken', 'auth_oidc');
+        }
+
+        // Handle "The existing token for this user does not contain a valid user ID" error.
+        if ($userid == 0) {
+            $userrec = $DB->get_record('user', ['username' => $username]);
+            if ($userrec) {
+                $userid = $userrec->id;
+            }
         }
 
         $tokenrec = new \stdClass;
@@ -510,7 +574,7 @@ class base {
         $tokenrec->userid = $userid;
         $tokenrec->oidcusername = $oidcusername;
         $tokenrec->scope = !empty($tokenparams['scope']) ? $tokenparams['scope'] : 'openid profile email';
-        $tokenrec->resource = !empty($tokenparams['resource']) ? $tokenparams['resource'] : $this->config->oidcresource;
+        $tokenrec->tokenresource = !empty($tokenparams['resource']) ? $tokenparams['resource'] : $this->config->oidcresource;
         $tokenrec->scope = !empty($tokenparams['scope']) ? $tokenparams['scope'] : $this->config->oidcscope;
         $tokenrec->authcode = $authparams['code'];
         $tokenrec->token = $tokenparams['access_token'];
