@@ -240,3 +240,5 @@ function auth_oidc_delete_token(int $tokenid) {
 
     $DB->delete_records('auth_oidc_token', ['id' => $tokenid]);
 }
+
+}
