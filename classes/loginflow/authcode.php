@@ -175,11 +175,11 @@ class authcode extends base {
      * @param array $authparams Received parameters.
      */
     protected function handleauthresponse(array $authparams) {
-        global $DB, $STATEADDITIONALDATA, $USER;
+        global $DB, $STATEADDITIONALDATA, $USER, $CFG;
 
         if (!empty($authparams['error_description'])) {
             utils::debug('Authorization error.', 'authcode::handleauthresponse', $authparams);
-            throw new \moodle_exception('errorauthgeneral', 'auth_oidc');
+            redirect($CFG->wwwroot, get_string('errorauthgeneral', 'auth_oidc'), null, \core\output\notification::NOTIFY_ERROR);
         }
 
         if (!isset($authparams['code'])) {
@@ -423,6 +423,12 @@ class authcode extends base {
         global $DB, $CFG;
 
         $tokenrec = $DB->get_record('auth_oidc_token', ['oidcuniqid' => $oidcuniqid]);
+
+        // Do not continue if auth plugin is not enabled,
+        if (!is_enabled_auth('oidc')) {
+            throw new \moodle_exception('erroroidcnotenabled', 'auth_oidc', null, null, '1');
+        }
+
         if (!empty($tokenrec)) {
             // Already connected user.
             if (empty($tokenrec->userid)) {
@@ -452,7 +458,14 @@ class authcode extends base {
             $username = $user->username;
             $this->updatetoken($tokenrec->id, $authparams, $tokenparams);
             $user = authenticate_user_login($username, null, true);
-            complete_user_login($user);
+
+            if (!empty($user)) {
+                complete_user_login($user);
+            } else {
+                // There was a problem in authenticate_user_login.
+                throw new \moodle_exception('errorauthgeneral', 'auth_oidc', null, null, '2');
+            }
+
             return true;
         } else {
             // No existing token, user not connected.
@@ -519,13 +532,13 @@ class authcode extends base {
                     $DB->update_record('auth_oidc_token', $updatedtokenrec);
                 }
                 complete_user_login($user);
-                return true;
             } else {
                 // There was a problem in authenticate_user_login. Clean up incomplete token record.
                 if (!empty($tokenrec)) {
                     $DB->delete_records('auth_oidc_token', ['id' => $tokenrec->id]);
                 }
-                throw new \moodle_exception('errorauthgeneral', 'auth_oidc', null, null, '2');
+
+                redirect($CFG->wwwroot, get_string('errorauthgeneral', 'auth_oidc'), null, \core\output\notification::NOTIFY_ERROR);
             }
 
             return true;

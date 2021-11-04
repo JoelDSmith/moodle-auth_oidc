@@ -128,7 +128,7 @@ class auth_plugin_oidc extends \auth_plugin_base {
         if (!empty($noredirect)) {
             $oidc = 0;
         }
-        if (!$this->config->forceredirect) {
+        if (!isset($this->config->forceredirect) || !$this->config->forceredirect) {
             return false; // Never redirect if we haven't enabled the forceredirect setting
         }
         // Never redirect on POST unless we are requesting the login index.php page.
@@ -284,7 +284,7 @@ class auth_plugin_oidc extends \auth_plugin_base {
     }
 
     /**
-     * Log out user from Office 365 if single sign off integration is enabled.
+     * Log out user from Microsoft 365 if single sign off integration is enabled.
      *
      * @param stdClass $user
      *

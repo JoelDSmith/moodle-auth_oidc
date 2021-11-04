@@ -27,7 +27,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $string['pluginname'] = 'OpenID Connect';
-$string['auth_oidcdescription'] = 'The OpenID Connect plugin provides single-sign-on functionality using configurable identity providers.';
+$string['auth_oidcdescription'] = 'The OpenID Connect authentication plugin provides single-sign-on functionality using configurable identity providers.';
 
 $string['cfg_alterlogout'] = 'Alternative Logout URL';
 $string['cfg_alterlogout_desc'] = 'The URL to redirect a user after all internal logout mechanisms are run';
@@ -90,14 +90,19 @@ $string['cfg_userrestrictions_desc'] = 'Only allow users to log in that meet cer
 $string['cfg_userrestrictionscasesensitive_key'] = 'User Restrictions Case Sensitive';
 $string['cfg_userrestrictioncasesensitive_desc'] = 'This controls if the "/i" option in regular expression is used in the user restriction match.<br/>If enabled, all user restriction checks will be performed as with case sensitive. Note if this is disabled, any patterns on letter cases will be ignored.';
 $string['cfg_signoffintegration_key'] = 'Single sign off';
-$string['cfg_signoffintegration_desc'] = 'If enabled, when a Moodle user using OIDC authentication method signs off from Moodle, Moodle will attempt to log the user off from Office 365 as well.
+$string['cfg_signoffintegration_desc'] = 'When connecting to Azure AD, if this option is enabled, when a Moodle user using the OpenID Connect authentication method signs off from Moodle, Moodle will attempt to log the user off from Microsoft 365 as well.
 
-Note the URL of Moodle site ({$a}) needs to be added as a redirect URI in the Azure app created for Moodle Office 365 integration.';
+Note the URL of Moodle site ({$a}) needs to be added as a redirect URI in the Azure app created for Moodle Microsoft 365 integration.';
 $string['cfg_logoutendpoint_key'] = 'Logout Endpoint';
 $string['cfg_logoutendpoint_desc'] = 'The URI of the logout endpoint from your identity provider to use.';
 $string['cfg_tools'] = 'Tools';
 $string['cfg_cleanupoidctokens_key'] = 'Cleanup OpenID Connect Tokens';
 $string['cfg_cleanupoidctokens_desc'] = 'If your users are experiencing problems logging in using their Microsoft 365 account, trying cleaning up OpenID Connect tokens. This removes stray and incomplete tokens that can cause errors. WARNING: This may interrupt logins in-process, so it\'s best to do this during downtime.';
+$string['cfg_field_mapping_desc'] = 'User profile data can be mapped from Open ID Connect identity providers (IdP) to Moodle.<br/>
+<ul>
+<li>Basic profile data is available from ID tokens from all IdP.</li>
+<li>If Azure AD is used as the IdP, additional profile data can be made available by installing and configuring the <a href="https://moodle.org/plugins/local_o365">Microsoft 365 integration plugin (local_o365)</a>.</li>
+</ul>';
 
 $string['event_debug'] = 'Debug message';
 
@@ -185,6 +190,7 @@ $string['ucp_disconnect_details'] = 'This will disconnect your Moodle account fr
 $string['ucp_title'] = '{$a} Management';
 $string['ucp_o365accountconnected'] = 'This Microsoft 365 account is already connected with another Moodle account.';
 
+// Clean up OIDC tokens.
 $string['cleanup_oidc_tokens'] = 'Cleanup OpenID Connect tokens';
 $string['unmatched'] = 'Unmatched';
 $string['delete_token'] = 'Delete token';
@@ -202,3 +208,39 @@ $string['token_deleted'] = 'Token was deleted successfully';
 $string['no_token_to_cleanup'] = 'There are no OIDC token to cleanup.';
 
 $string['errorusermatched'] = 'The Microsoft 365 account "{$a->aadupn}" is already matched with Moodle user "{$a->username}". To complete the connection, please log in as that Moodle user first and follow the instructions in the Microsoft block.';
+
+// User mapping options.
+$string['update_oncreate_and_onlogin'] = 'On creation and every login';
+$string['update_oncreate_and_onlogin_and_usersync'] = 'On creation, every login, and every user sync task run';
+$string['update_onlogin_and_usersync'] = 'On every login and every user sync task run';
+
+// Remote fields.
+$string['settings_fieldmap_feild_not_mapped'] = '(not mapped)';
+$string['settings_fieldmap_field_city'] = 'City';
+$string['settings_fieldmap_field_companyName'] = 'Company Name';
+$string['settings_fieldmap_field_objectId'] = 'Object ID';
+$string['settings_fieldmap_field_country'] = 'Country';
+$string['settings_fieldmap_field_department'] = 'Department';
+$string['settings_fieldmap_field_displayName'] = 'Display Name';
+$string['settings_fieldmap_field_surname'] = 'Surname';
+$string['settings_fieldmap_field_faxNumber'] = 'Fax Number';
+$string['settings_fieldmap_field_telephoneNumber'] = 'Telephone Number';
+$string['settings_fieldmap_field_givenName'] = 'Given Name';
+$string['settings_fieldmap_field_jobTitle'] = 'Job Title';
+$string['settings_fieldmap_field_mail'] = 'Email';
+$string['settings_fieldmap_field_mobile'] = 'Mobile';
+$string['settings_fieldmap_field_postalCode'] = 'Postal Code';
+$string['settings_fieldmap_field_preferredLanguage'] = 'Language';
+$string['settings_fieldmap_field_state'] = 'State';
+$string['settings_fieldmap_field_streetAddress'] = 'Street Address';
+$string['settings_fieldmap_field_userPrincipalName'] = 'Username (UPN)';
+$string['settings_fieldmap_field_employeeId'] = 'Employee ID';
+$string['settings_fieldmap_field_businessPhones'] = 'Office phone';
+$string['settings_fieldmap_field_mobilePhone'] = 'Mobile phone';
+$string['settings_fieldmap_field_officeLocation'] = 'Office';
+$string['settings_fieldmap_field_preferredName'] = 'Preferred Name';
+$string['settings_fieldmap_field_manager'] = 'Manager';
+$string['settings_fieldmap_field_teams'] = 'Teams';
+$string['settings_fieldmap_field_groups'] = 'Groups';
+$string['settings_fieldmap_field_roles'] = 'Roles';
+$string['settings_fieldmap_field_extensionattribute'] = 'Extension attribute {$a}';
