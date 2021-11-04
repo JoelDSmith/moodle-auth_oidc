@@ -129,6 +129,7 @@ function auth_oidc_after_config() {
         error_log('auth_oidc_after_config error! ' . $exception->getTraceAsString());
         // @codingStandardsIgnoreEnd
     }
+}
 
 /**
  * Determine if local_o365 plugins is installed.
@@ -239,6 +240,4 @@ function auth_oidc_delete_token(int $tokenid) {
     }
 
     $DB->delete_records('auth_oidc_token', ['id' => $tokenid]);
-}
-
 }
