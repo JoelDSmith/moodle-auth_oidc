@@ -451,7 +451,24 @@ class authcode extends base {
             }
             $username = $user->username;
             $this->updatetoken($tokenrec->id, $authparams, $tokenparams);
+            
+            // Prevent access to users who are suspended.
+            if ($user->suspended) {
+                $failurereason = AUTH_LOGIN_SUSPENDED;
+                $eventdata = ['userid' => $user->id, 'other' => ['username' => $username, 'reason' => $failurereason]];
+                $event = \core\event\user_login_failed::create($eventdata);
+                $event->trigger();
+
+                throw new \moodle_exception('errorauthsuspendeduser', 'auth_oidc', null, $username, '1');
+            }
+            
             $user = authenticate_user_login($username, null, true);
+            
+            if (!$user) {
+                // There was a problem in authenticate_user_login.
+                throw new \moodle_exception('errorauthgeneral', 'auth_oidc', null, null, '2');
+            }
+            
             complete_user_login($user);
             return true;
         } else {
