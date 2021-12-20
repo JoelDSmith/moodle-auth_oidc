@@ -459,7 +459,7 @@ class authcode extends base {
                 $event = \core\event\user_login_failed::create($eventdata);
                 $event->trigger();
 
-                throw new \moodle_exception('errorauthsuspendeduser', 'auth_oidc', null, $username, '1');
+                throw new \moodle_exception('errorauthsuspendeduser', 'auth_oidc', null, $username);
             }
             
             $user = authenticate_user_login($username, null, true);
